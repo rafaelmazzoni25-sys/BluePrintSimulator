@@ -10,8 +10,7 @@ interface ContextMenuProps {
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ position, onSelect, variables }) => {
-  const nodeTypes = Object.keys(NODE_TEMPLATES).filter(t => t !== 'COMMENT');
-  const hasComment = 'COMMENT' in NODE_TEMPLATES;
+  const nodeTypes = Object.keys(NODE_TEMPLATES);
 
   return (
     <div
@@ -30,16 +29,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ position, onSelect, va
             {NODE_TEMPLATES[type].name}
           </li>
         ))}
-         {hasComment && <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-600">Utilities</div>}
-         {hasComment && (
-            <li
-                key="COMMENT"
-                onClick={() => onSelect('COMMENT')}
-                className="p-1 hover:bg-blue-600 rounded cursor-pointer text-sm"
-            >
-                {NODE_TEMPLATES['COMMENT'].name}
-            </li>
-         )}
         {variables.length > 0 && <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-600">Variables</div>}
         {variables.map(v => (
              <li key={`get-${v.id}`} onClick={() => onSelect(`GET_VAR_${v.id}`)} className="p-1 hover:bg-blue-600 rounded cursor-pointer text-sm">Get {v.name}</li>

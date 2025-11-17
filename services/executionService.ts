@@ -8,10 +8,6 @@ type ConnectionsMap = {
     byFrom: Map<string, Connection[]>;
     byTo: Map<string, Connection | undefined>;
 };
-type ExecutionContext = {
-    loopNodeId: NodeId;
-    currentIndex: number;
-};
 
 function buildMaps(nodes: Node[], connections: Connection[]) {
     const nodesMap: NodesMap = new Map(nodes.map(n => [n.id, n]));
@@ -30,7 +26,7 @@ function buildMaps(nodes: Node[], connections: Connection[]) {
     return { nodesMap, connectionsMap };
 }
 
-function evaluatePin(nodeId: NodeId, pinId: PinId, nodesMap: NodesMap, connectionsMap: ConnectionsMap, variables: VariableMap, contexts: ExecutionContext[]): any {
+function evaluatePin(nodeId: NodeId, pinId: PinId, nodesMap: NodesMap, connectionsMap: ConnectionsMap, variables: VariableMap): any {
     const node = nodesMap.get(nodeId);
     if (!node) throw new Error(`Node ${nodeId} not found`);
 
@@ -40,7 +36,7 @@ function evaluatePin(nodeId: NodeId, pinId: PinId, nodesMap: NodesMap, connectio
     if (pin.direction === PinDirection.INPUT) {
         const connection = connectionsMap.byTo.get(`${nodeId}-${pinId}`);
         if (connection) {
-            return evaluatePin(connection.from.nodeId, connection.from.pinId, nodesMap, connectionsMap, variables, contexts);
+            return evaluatePin(connection.from.nodeId, connection.from.pinId, nodesMap, connectionsMap, variables);
         }
         return pin.value; // Return default value if not connected
     }
@@ -50,22 +46,13 @@ function evaluatePin(nodeId: NodeId, pinId: PinId, nodesMap: NodesMap, connectio
         case 'LITERAL_STRING':
         case 'LITERAL_INTEGER':
         case 'LITERAL_BOOLEAN':
-            const inputPin = node.inputs[0];
-            const connection = connectionsMap.byTo.get(`${node.id}-${inputPin.id}`);
-             if (connection) {
-                return evaluatePin(connection.from.nodeId, connection.from.pinId, nodesMap, connectionsMap, variables, contexts);
-            }
-            return inputPin.value;
+            // The value is stored in the corresponding input pin
+            return node.inputs[0].value;
         case 'MATH_ADD_INT':
-            const a = evaluatePin(nodeId, node.inputs[0].id, nodesMap, connectionsMap, variables, contexts);
-            const b = evaluatePin(nodeId, node.inputs[1].id, nodesMap, connectionsMap, variables, contexts);
+            const a = evaluatePin(nodeId, node.inputs[0].id, nodesMap, connectionsMap, variables);
+            const b = evaluatePin(nodeId, node.inputs[1].id, nodesMap, connectionsMap, variables);
             return parseInt(a, 10) + parseInt(b, 10);
-        case 'FLOW_LOOP':
-             if (pin.name === 'Index') {
-                const context = contexts.find(c => c.loopNodeId === nodeId);
-                return context?.currentIndex ?? 0;
-            }
-            return;
+        case 'GET_VAR':
         case (node.type.startsWith('GET_VAR_') ? node.type : ''): {
             const varId = node.type.replace('GET_VAR_', '');
             const variable = variables.get(varId);
@@ -74,86 +61,6 @@ function evaluatePin(nodeId: NodeId, pinId: PinId, nodesMap: NodesMap, connectio
         }
         default:
             return pin.value;
-    }
-}
-
-
-function* executeFrom(
-    nodeId: NodeId, 
-    execPinId: PinId, 
-    nodesMap: NodesMap, 
-    connectionsMap: ConnectionsMap, 
-    variables: VariableMap,
-    contexts: ExecutionContext[]
-): Generator<{type: string, message: string}, void, unknown> {
-    const connections = connectionsMap.byFrom.get(`${nodeId}-${execPinId}`);
-    if (!connections || connections.length === 0) {
-        return; // End of path
-    }
-
-    for (const connection of connections) {
-        const nextNode = nodesMap.get(connection.to.nodeId);
-        if (!nextNode) continue;
-        
-        switch (nextNode.type) {
-            case 'ACTION_PRINT_STRING': {
-                const inStringPin = nextNode.inputs.find(p => p.name === 'In String')!;
-                const message = evaluatePin(nextNode.id, inStringPin.id, nodesMap, connectionsMap, variables, contexts);
-                yield { type: 'log', message: String(message) };
-                
-                const nextExecPin = nextNode.outputs.find(p => p.type === PinType.EXECUTION);
-                if (nextExecPin) {
-                    yield* executeFrom(nextNode.id, nextExecPin.id, nodesMap, connectionsMap, variables, contexts);
-                }
-                break;
-            }
-            case 'BRANCH': {
-                const conditionPin = nextNode.inputs.find(p => p.name === 'Condition')!;
-                const condition = evaluatePin(nextNode.id, conditionPin.id, nodesMap, connectionsMap, variables, contexts);
-                const outputPinName = condition ? 'True' : 'False';
-                const nextExecPin = nextNode.outputs.find(p => p.name === outputPinName);
-                if (nextExecPin) {
-                    yield* executeFrom(nextNode.id, nextExecPin.id, nodesMap, connectionsMap, variables, contexts);
-                }
-                break;
-            }
-            case (nextNode.type.startsWith('SET_VAR_') ? nextNode.type : ''): {
-                const varId = nextNode.type.replace('SET_VAR_', '');
-                const variable = variables.get(varId);
-                if(variable) {
-                    const dataInputPin = nextNode.inputs.find(p => p.type === PinType.DATA)!;
-                    const value = evaluatePin(nextNode.id, dataInputPin.id, nodesMap, connectionsMap, variables, contexts);
-                    variable.value = value;
-                    variables.set(varId, variable);
-                }
-                const nextExecPin = nextNode.outputs.find(p => p.type === PinType.EXECUTION);
-                if (nextExecPin) {
-                    yield* executeFrom(nextNode.id, nextExecPin.id, nodesMap, connectionsMap, variables, contexts);
-                }
-                break;
-            }
-            case 'FLOW_LOOP': {
-                const firstIndexPin = nextNode.inputs.find(p => p.name === 'First Index')!;
-                const lastIndexPin = nextNode.inputs.find(p => p.name === 'Last Index')!;
-                
-                const firstIndex = evaluatePin(nextNode.id, firstIndexPin.id, nodesMap, connectionsMap, variables, contexts);
-                const lastIndex = evaluatePin(nextNode.id, lastIndexPin.id, nodesMap, connectionsMap, variables, contexts);
-
-                const loopBodyPin = nextNode.outputs.find(p => p.name === 'Loop Body')!;
-                const completedPin = nextNode.outputs.find(p => p.name === 'Completed')!;
-
-                for (let i = firstIndex; i <= lastIndex; i++) {
-                    const newContexts = contexts.filter(c => c.loopNodeId !== nextNode.id);
-                    newContexts.push({ loopNodeId: nextNode.id, currentIndex: i });
-                    yield* executeFrom(nextNode.id, loopBodyPin.id, nodesMap, connectionsMap, variables, newContexts);
-                }
-
-                yield* executeFrom(nextNode.id, completedPin.id, nodesMap, connectionsMap, variables, contexts);
-                break;
-            }
-            default:
-                break;
-        }
     }
 }
 
@@ -166,8 +73,68 @@ export function* executeGraph(nodes: Node[], connections: Connection[], variable
         return;
     }
 
-    const startExecPin = startNode.outputs.find(p => p.type === PinType.EXECUTION);
-    if (startExecPin) {
-        yield* executeFrom(startNode.id, startExecPin.id, nodesMap, connectionsMap, variables, []);
+    let currentNode: Node | undefined = startNode;
+    let execPinId: PinId | undefined = startNode.outputs.find(p => p.type === PinType.EXECUTION)!.id;
+
+    while (currentNode && execPinId) {
+        const currentExecPin = currentNode.outputs.find(p => p.id === execPinId);
+        
+        // Find next connection from the *current* execution output pin
+        const execConnections = connectionsMap.byFrom.get(`${currentNode.id}-${execPinId}`);
+        
+        let nextNodeId: NodeId | undefined = undefined;
+        let nextExecPinId: PinId | undefined = undefined;
+
+        if (execConnections && execConnections.length > 0) {
+            const nextConnection = execConnections[0]; // Assuming one exec path for now
+            const nextNode = nodesMap.get(nextConnection.to.nodeId);
+            if(nextNode){
+                 // Now we process the *next* node, which is the one connected to our current exec output
+                currentNode = nextNode;
+
+                switch (currentNode.type) {
+                    case 'ACTION_PRINT_STRING': {
+                        const inStringPin = currentNode.inputs.find(p => p.name === 'In String')!;
+                        const message = evaluatePin(currentNode.id, inStringPin.id, nodesMap, connectionsMap, variables);
+                        yield { type: 'log', message: String(message) };
+                        // Find the exec output of this print string node to continue
+                        nextExecPinId = currentNode.outputs.find(p => p.type === PinType.EXECUTION)?.id;
+                        break;
+                    }
+                    case 'BRANCH': {
+                        const conditionPin = currentNode.inputs.find(p => p.name === 'Condition')!;
+                        const condition = evaluatePin(currentNode.id, conditionPin.id, nodesMap, connectionsMap, variables);
+                        const outputPinName = condition ? 'True' : 'False';
+                        nextExecPinId = currentNode.outputs.find(p => p.name === outputPinName)?.id;
+                        break;
+                    }
+                     case (currentNode.type.startsWith('SET_VAR_') ? currentNode.type : ''): {
+                        const varId = currentNode.type.replace('SET_VAR_', '');
+                        const variable = variables.get(varId);
+                        if(variable) {
+                            const dataInputPin = currentNode.inputs.find(p => p.type === PinType.DATA)!;
+                            const value = evaluatePin(currentNode.id, dataInputPin.id, nodesMap, connectionsMap, variables);
+                            variable.value = value;
+                            variables.set(varId, variable);
+                        }
+                        nextExecPinId = currentNode.outputs.find(p => p.type === PinType.EXECUTION)?.id;
+                        break;
+                     }
+                    default:
+                        // For nodes without special logic, just find their exec output
+                        nextExecPinId = currentNode.outputs.find(p => p.type === PinType.EXECUTION)?.id;
+                        break;
+                }
+                
+                execPinId = nextExecPinId;
+            } else {
+                 currentNode = undefined;
+                 execPinId = undefined;
+            }
+        } else {
+             // End of execution path
+             currentNode = undefined;
+             execPinId = undefined;
+        }
     }
 }
