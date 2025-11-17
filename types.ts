@@ -39,6 +39,9 @@ export interface Node {
   position: { x: number; y: number };
   inputs: Pin[];
   outputs: Pin[];
+  width?: number;
+  height?: number;
+  commentText?: string;
 }
 
 export interface Connection {

@@ -15,6 +15,7 @@ export const BlueprintEditor: React.FC<BlueprintEditorProps> = ({
   addNode,
   updateNodePosition,
   updateNodeInputValue,
+  updateNodeDetails,
   addConnection,
   getPin,
   variables,
@@ -109,6 +110,7 @@ export const BlueprintEditor: React.FC<BlueprintEditorProps> = ({
           node={node}
           onMove={updateNodePosition}
           onInputValueChange={updateNodeInputValue}
+          onUpdateDetails={updateNodeDetails}
           onPinMouseDown={handleMouseDownOnPin}
           onPinMouseUp={handleMouseUpOnPin}
           connections={connections}

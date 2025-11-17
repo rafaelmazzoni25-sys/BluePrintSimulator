@@ -26,13 +26,12 @@ const App: React.FC = () => {
       
       const run = () => {
         const result = executionGenerator.next();
-        // FIX: Check !result.done to help TypeScript infer the correct type for result.value
-        if (!result.done && result.value) {
-          if(result.value.type === 'log') {
+        // FIX: The logic has been consolidated into a single if/else block.
+        // The `!result.done` check acts as a type guard, ensuring `result.value` is defined and not void in this block.
+        if (!result.done) {
+          if (result.value.type === 'log') {
             setLogs(prev => [...prev, result.value.message]);
           }
-        }
-        if (!result.done) {
           // For now, synchronous execution. Could add timeout for async feel.
           run();
         } else {

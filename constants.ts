@@ -30,13 +30,21 @@ export type NodeTemplate = Omit<Node, 'id' | 'position' | 'inputs' | 'outputs'> 
 
 export const createNodeFromTemplate = (template: NodeTemplate, position: {x: number, y: number}): Node => {
     const nodeId = uuidv4();
-    return {
+    const node: Node = {
         ...template,
         id: nodeId,
         position,
         inputs: template.inputs.map(pin => ({...pin, id: uuidv4(), nodeId})),
         outputs: template.outputs.map(pin => ({...pin, id: uuidv4(), nodeId})),
     }
+
+    if (template.type === 'COMMENT') {
+        node.width = 300;
+        node.height = 100;
+        node.commentText = 'A descriptive comment';
+    }
+
+    return node;
 }
 
 export const NODE_TEMPLATES: { [key: string]: NodeTemplate } = {
@@ -116,5 +124,12 @@ export const NODE_TEMPLATES: { [key: string]: NodeTemplate } = {
     outputs: [
       { name: '', type: PinType.DATA, dataType: DataType.BOOLEAN, direction: PinDirection.OUTPUT },
     ],
+  },
+  // Misc
+  COMMENT: {
+    type: 'COMMENT',
+    name: 'Comment',
+    inputs: [],
+    outputs: [],
   },
 };

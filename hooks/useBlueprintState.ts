@@ -71,6 +71,10 @@ export const useBlueprintState = () => {
     }));
   }, []);
 
+  const updateNodeDetails = useCallback((nodeId: NodeId, details: Partial<Node>) => {
+    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, ...details } : n));
+  }, []);
+
   const getPin = useCallback((nodeId: NodeId, pinId: PinId): Pin | undefined => {
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return undefined;
@@ -129,6 +133,7 @@ export const useBlueprintState = () => {
     addNode,
     updateNodePosition,
     updateNodeInputValue,
+    updateNodeDetails,
     addConnection,
     getPin,
     addVariable,
