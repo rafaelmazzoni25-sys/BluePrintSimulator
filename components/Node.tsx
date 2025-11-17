@@ -1,6 +1,6 @@
 
 import React, { useCallback } from 'react';
-import type { Node as NodeType, Connection, NodeId, PinId } from '../types';
+import type { Node as NodeType, Connection, NodeId, PinId, Pin as PinType } from '../types';
 import { PinDirection } from '../types';
 import { Pin } from './Pin';
 import { NODE_HEADER_HEIGHT, NODE_WIDTH } from '../constants';
@@ -13,9 +13,10 @@ interface NodeProps {
   onPinMouseDown: (e: React.MouseEvent, nodeId: string, pinId: string) => void;
   onPinMouseUp: (e: React.MouseEvent, nodeId: string, pinId: string) => void;
   connections: Connection[];
+  sourcePinForPendingConnection: PinType | null;
 }
 
-export const Node: React.FC<NodeProps> = ({ node, onMove, onInputValueChange, onUpdateDetails, onPinMouseDown, onPinMouseUp, connections }) => {
+export const Node: React.FC<NodeProps> = ({ node, onMove, onInputValueChange, onUpdateDetails, onPinMouseDown, onPinMouseUp, connections, sourcePinForPendingConnection }) => {
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName.toLowerCase() === 'input' || target.tagName.toLowerCase() === 'textarea') {
@@ -71,8 +72,8 @@ export const Node: React.FC<NodeProps> = ({ node, onMove, onInputValueChange, on
     document.addEventListener('mouseup', handleMouseUp);
   }, [node.id, node.width, node.height, onUpdateDetails]);
 
-  const isInputConnected = (pinId: PinId) => {
-    return connections.some(c => c.to.pinId === pinId);
+  const isPinConnected = (pinId: PinId) => {
+    return connections.some(c => c.from.pinId === pinId || c.to.pinId === pinId);
   }
 
   if (node.type === 'COMMENT') {
@@ -125,12 +126,27 @@ export const Node: React.FC<NodeProps> = ({ node, onMove, onInputValueChange, on
       <div className="flex justify-between p-2">
         <div className="flex flex-col space-y-2">
           {node.inputs.map((pin) => (
-            <Pin key={pin.id} pin={pin} onMouseDown={onPinMouseDown} onMouseUp={onPinMouseUp} onValueChange={onInputValueChange} isConnected={isInputConnected(pin.id)}/>
+            <Pin
+              key={pin.id}
+              pin={pin}
+              onMouseDown={onPinMouseDown}
+              onMouseUp={onPinMouseUp}
+              onValueChange={onInputValueChange}
+              isConnected={isPinConnected(pin.id)}
+              sourcePinForPendingConnection={sourcePinForPendingConnection}
+            />
           ))}
         </div>
         <div className="flex flex-col space-y-2 items-end">
           {node.outputs.map((pin) => (
-            <Pin key={pin.id} pin={pin} onMouseDown={onPinMouseDown} onMouseUp={onPinMouseUp} onValueChange={onInputValueChange} isConnected={false} />
+            <Pin
+              key={pin.id}
+              pin={pin}
+              onMouseDown={onPinMouseDown}
+              onMouseUp={onPinMouseUp}
+              onValueChange={onInputValueChange}
+              isConnected={isPinConnected(pin.id)}
+              sourcePinForPendingConnection={sourcePinForPendingConnection} />
           ))}
         </div>
       </div>

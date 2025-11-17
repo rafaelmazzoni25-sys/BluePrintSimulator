@@ -1,5 +1,5 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import type { Pin as PinType, NodeId, PinId } from '../types';
 import { PinDirection, PinType as PinTypeEnum, DataType } from '../types';
 import { PIN_SIZE, DATA_TYPE_COLORS } from '../constants';
@@ -10,21 +10,27 @@ interface PinProps {
   onMouseUp: (e: React.MouseEvent, nodeId: string, pinId: string) => void;
   onValueChange: (nodeId: NodeId, pinId: PinId, value: any) => void;
   isConnected: boolean;
+  sourcePinForPendingConnection: PinType | null;
 }
 
-const ExecutionPinIcon: React.FC = () => (
-  <svg width={PIN_SIZE} height={PIN_SIZE} viewBox="0 0 24 24" fill="white" className="stroke-current stroke-1">
+const ExecutionPinIcon: React.FC<{ isConnected: boolean }> = ({ isConnected }) => (
+  <svg width={PIN_SIZE} height={PIN_SIZE} viewBox="0 0 24 24" fill={isConnected ? "white" : "transparent"} className="stroke-white stroke-2">
     <path d="M8 5v14l11-7z" />
   </svg>
 );
 
-const DataPinIcon: React.FC<{ color: string }> = ({ color }) => (
-  <div style={{ width: PIN_SIZE, height: PIN_SIZE }} className={`rounded-full ${color}`} />
+const DataPinIcon: React.FC<{ color: string; isConnected: boolean }> = ({ color, isConnected }) => (
+  <div style={{ width: PIN_SIZE, height: PIN_SIZE }} className={`rounded-full ${color} relative`}>
+    {isConnected && <div className="absolute inset-0 rounded-full ring-2 ring-white ring-inset"></div>}
+  </div>
 );
 
-export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueChange, isConnected }) => {
+export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueChange, isConnected, sourcePinForPendingConnection }) => {
   const pinRef = useRef<HTMLDivElement>(null);
   
+  // For inputs that are connected, we don't show the default value input
+  const isInputAndConnected = pin.direction === PinDirection.INPUT && isConnected;
+
   const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value: any = e.target.value;
     if (pin.dataType === DataType.INTEGER) value = parseInt(value, 10) || 0;
@@ -34,7 +40,7 @@ export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueCh
   };
   
   const renderInput = () => {
-    if (isConnected || pin.type === PinTypeEnum.EXECUTION) return null;
+    if (isInputAndConnected || pin.type === PinTypeEnum.EXECUTION) return null;
     
     // For literal nodes
     if (pin.name === '' && pin.direction === PinDirection.INPUT) {
@@ -59,17 +65,41 @@ export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueCh
     return null;
   }
 
+  const isSelf = sourcePinForPendingConnection?.id === pin.id;
+
+  const isCompatible = useMemo(() => {
+    const sourcePin = sourcePinForPendingConnection;
+    const targetPin = pin;
+
+    if (!sourcePin || isSelf) return false;
+
+    // Logic for a valid connection
+    if (sourcePin.direction === targetPin.direction) return false;
+    if (sourcePin.type !== targetPin.type) return false;
+    if (sourcePin.type === PinTypeEnum.DATA && sourcePin.dataType !== targetPin.dataType) return false;
+    if (sourcePin.nodeId === targetPin.nodeId) return false;
+
+    return true;
+  }, [pin, sourcePinForPendingConnection, isSelf]);
+
+  const interactionStyles = useMemo(() => {
+    if (!sourcePinForPendingConnection) return '';
+    if (isSelf) return '';
+    if (isCompatible) return 'ring-2 ring-yellow-400 rounded-full scale-125 transition-transform z-10';
+    return 'opacity-30';
+  }, [sourcePinForPendingConnection, isCompatible, isSelf]);
+
   const pinElement = (
     <div
       ref={pinRef}
-      className="cursor-pointer"
+      className={`cursor-pointer transition-all ${interactionStyles}`}
       onMouseDown={(e) => onMouseDown(e, pin.nodeId, pin.id)}
       onMouseUp={(e) => onMouseUp(e, pin.nodeId, pin.id)}
     >
       {pin.type === PinTypeEnum.EXECUTION ? (
-        <ExecutionPinIcon />
+        <ExecutionPinIcon isConnected={isConnected} />
       ) : (
-        <DataPinIcon color={DATA_TYPE_COLORS[pin.dataType]} />
+        <DataPinIcon color={DATA_TYPE_COLORS[pin.dataType]} isConnected={isConnected} />
       )}
     </div>
   );

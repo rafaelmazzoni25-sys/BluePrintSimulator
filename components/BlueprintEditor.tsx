@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import type { Node as NodeType, Connection as ConnectionType, Pin as PinType, ContextMenuState, PendingConnection, NodeId, PinId } from '../types';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import type { Node as NodeType, Connection as ConnectionType, Pin as PinDataType, ContextMenuState, PendingConnection, NodeId, PinId } from '../types';
 import { PinDirection } from '../types';
 import type { BlueprintState } from '../hooks/useBlueprintState';
 import { Node } from './Node';
@@ -23,6 +23,11 @@ export const BlueprintEditor: React.FC<BlueprintEditorProps> = ({
   const editorRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ isOpen: false, position: { x: 0, y: 0 } });
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
+
+  const sourcePinForPendingConnection = useMemo(() => {
+    if (!pendingConnection) return null;
+    return getPin(pendingConnection.from.nodeId, pendingConnection.from.pinId);
+  }, [pendingConnection, getPin]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -114,6 +119,7 @@ export const BlueprintEditor: React.FC<BlueprintEditorProps> = ({
           onPinMouseDown={handleMouseDownOnPin}
           onPinMouseUp={handleMouseUpOnPin}
           connections={connections}
+          sourcePinForPendingConnection={sourcePinForPendingConnection}
         />
       ))}
 
