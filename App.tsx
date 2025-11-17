@@ -26,14 +26,13 @@ const App: React.FC = () => {
       
       const run = () => {
         const result = executionGenerator.next();
-        // FIX: Inverted the condition to check for `result.done` being true.
-        // This allows TypeScript to correctly infer that `result.value` is defined
-        // in the `else` block, resolving the type error.
         if (result.done) {
            setLogs(prev => [...prev, '[Execution Finished]']);
         } else {
-          if (result.value.type === 'log') {
-            setLogs(prev => [...prev, result.value.message]);
+          // FIX: The type of `result.value` was not being correctly narrowed after checking `result.done`. Assigning it to a new variable helps TypeScript's control flow analysis.
+          const yieldedValue = result.value;
+          if (yieldedValue && yieldedValue.type === 'log') {
+            setLogs(prev => [...prev, yieldedValue.message]);
           }
           // For now, synchronous execution. Could add timeout for async feel.
           run();

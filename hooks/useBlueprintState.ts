@@ -1,7 +1,7 @@
 
 import { useState, useCallback } from 'react';
 import type { Node, Connection, Variable, Pin, NodeId, PinId } from '../types';
-import { DataType, PinDirection, PinType } from '../types';
+import { DataType, PinDirection, PinType, NodeCategory } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { createNodeFromTemplate, NODE_TEMPLATES } from '../constants';
 
@@ -19,6 +19,7 @@ export const useBlueprintState = () => {
             nodeToAdd = createNodeFromTemplate({
                 type: type,
                 name: `Get ${variable.name}`,
+                category: NodeCategory.DATA,
                 inputs: [],
                 outputs: [{ name: variable.name, type: PinType.DATA, dataType: variable.type, direction: PinDirection.OUTPUT }]
             }, position);
@@ -30,6 +31,7 @@ export const useBlueprintState = () => {
             nodeToAdd = createNodeFromTemplate({
                 type: type,
                 name: `Set ${variable.name}`,
+                category: NodeCategory.ACTION,
                 inputs: [
                     { name: '', type: PinType.EXECUTION, dataType: DataType.ANY, direction: PinDirection.INPUT },
                     { name: variable.name, type: PinType.DATA, dataType: variable.type, direction: PinDirection.INPUT }
@@ -82,28 +84,50 @@ export const useBlueprintState = () => {
   }, [nodes]);
 
   const addConnection = useCallback((fromPin: Pin, toPin: Pin) => {
+    // Pins must be of opposite directions
     if (fromPin.direction === toPin.direction) return;
 
+    // Sort pins into from (OUTPUT) and to (INPUT)
     const from = fromPin.direction === PinDirection.OUTPUT ? fromPin : toPin;
     const to = fromPin.direction === PinDirection.INPUT ? fromPin : toPin;
+    
+    // Node cannot connect to itself
+    if (from.nodeId === to.nodeId) return;
 
+    // Pin types must match (EXECUTION <-> EXECUTION, DATA <-> DATA)
     if (from.type !== to.type) return;
 
-    if (from.type === PinType.DATA && from.dataType !== to.dataType) return;
-
-    // Data inputs can only have one connection
-    if (to.type === PinType.DATA) {
-        setConnections(prev => prev.filter(c => !(c.to.nodeId === to.nodeId && c.to.pinId === to.id)));
+    // For DATA pins, types must be compatible (e.g. ANY -> STRING, but not BOOL -> INT)
+    if (from.type === PinType.DATA &&
+        from.dataType !== DataType.ANY &&
+        to.dataType !== DataType.ANY &&
+        from.dataType !== to.dataType) {
+      return;
     }
 
-    setConnections((prev) => [
-      ...prev,
-      {
-        id: uuidv4(),
-        from: { nodeId: from.nodeId, pinId: from.id },
-        to: { nodeId: to.nodeId, pinId: to.id },
-      },
-    ]);
+    setConnections((prev) => {
+      let newConnections = [...prev];
+      
+      // Data inputs can only have one connection. Remove existing one.
+      if (to.type === PinType.DATA) {
+        newConnections = newConnections.filter(c => !(c.to.nodeId === to.nodeId && c.to.pinId === to.id));
+      }
+
+      // Add the new connection
+      return [
+        ...newConnections,
+        {
+          id: uuidv4(),
+          from: { nodeId: from.nodeId, pinId: from.id },
+          to: { nodeId: to.nodeId, pinId: to.id },
+        },
+      ];
+    });
+  }, []);
+  
+  const removeNode = useCallback((nodeId: NodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setConnections(prev => prev.filter(c => c.from.nodeId !== nodeId && c.to.nodeId !== nodeId));
   }, []);
   
   const addVariable = useCallback(() => {
@@ -131,6 +155,7 @@ export const useBlueprintState = () => {
     connections,
     variables,
     addNode,
+    removeNode,
     updateNodePosition,
     updateNodeInputValue,
     updateNodeDetails,

@@ -6,8 +6,6 @@ import { PIN_SIZE, DATA_TYPE_COLORS } from '../constants';
 
 interface PinProps {
   pin: PinType;
-  onMouseDown: (e: React.MouseEvent, nodeId: string, pinId: string) => void;
-  onMouseUp: (e: React.MouseEvent, nodeId: string, pinId: string) => void;
   onValueChange: (nodeId: NodeId, pinId: PinId, value: any) => void;
   isConnected: boolean;
   sourcePinForPendingConnection: PinType | null;
@@ -25,7 +23,7 @@ const DataPinIcon: React.FC<{ color: string; isConnected: boolean }> = ({ color,
   </div>
 );
 
-export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueChange, isConnected, sourcePinForPendingConnection }) => {
+export const Pin: React.FC<PinProps> = ({ pin, onValueChange, isConnected, sourcePinForPendingConnection }) => {
   const pinRef = useRef<HTMLDivElement>(null);
   
   // For inputs that are connected, we don't show the default value input
@@ -42,23 +40,31 @@ export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueCh
   const renderInput = () => {
     if (isInputAndConnected || pin.type === PinTypeEnum.EXECUTION) return null;
     
+    const inputProps = {
+        className: "bg-gray-700 text-white text-xs rounded-sm p-1 pointer-events-auto",
+        onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+    };
+
     // For literal nodes
     if (pin.name === '' && pin.direction === PinDirection.INPUT) {
         if(pin.dataType === DataType.STRING) {
-            return <input type="text" defaultValue={pin.value} onChange={handleValueChange} className="bg-gray-700 text-white w-24 text-xs rounded-sm p-1" />;
+            return <input type="text" defaultValue={pin.value} onChange={handleValueChange} {...inputProps} className={`${inputProps.className} w-24`} />;
         }
         if(pin.dataType === DataType.INTEGER || pin.dataType === DataType.FLOAT) {
-            return <input type="number" defaultValue={pin.value} onChange={handleValueChange} className="bg-gray-700 text-white w-16 text-xs rounded-sm p-1" />;
+            return <input type="number" defaultValue={pin.value} onChange={handleValueChange} {...inputProps} className={`${inputProps.className} w-16`} />;
         }
         if(pin.dataType === DataType.BOOLEAN) {
-            return <input type="checkbox" defaultChecked={pin.value} onChange={handleValueChange} className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600" />;
+            return <input type="checkbox" defaultChecked={pin.value} onChange={handleValueChange} className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 pointer-events-auto" onMouseDown={(e) => e.stopPropagation()} />;
         }
     }
 
     // For regular data inputs with default values
     if (pin.direction === PinDirection.INPUT && pin.type === PinTypeEnum.DATA) {
       if (pin.dataType === DataType.STRING) {
-        return <input type="text" defaultValue={pin.value} onChange={handleValueChange} className="bg-gray-700 text-white w-20 text-xs rounded-sm p-1" />;
+        return <input type="text" defaultValue={pin.value} onChange={handleValueChange} {...inputProps} className={`${inputProps.className} w-20`} />;
+      }
+       if (pin.dataType === DataType.INTEGER || pin.dataType === DataType.FLOAT) {
+        return <input type="number" defaultValue={pin.value} onChange={handleValueChange} {...inputProps} className={`${inputProps.className} w-16`} />;
       }
     }
 
@@ -72,19 +78,24 @@ export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueCh
     const targetPin = pin;
 
     if (!sourcePin || isSelf) return false;
-
-    // Logic for a valid connection
+    if (sourcePin.nodeId === targetPin.nodeId) return false;
     if (sourcePin.direction === targetPin.direction) return false;
     if (sourcePin.type !== targetPin.type) return false;
-    if (sourcePin.type === PinTypeEnum.DATA && sourcePin.dataType !== targetPin.dataType) return false;
-    if (sourcePin.nodeId === targetPin.nodeId) return false;
+
+    if (sourcePin.type === PinTypeEnum.DATA) {
+      const fromType = sourcePin.direction === PinDirection.OUTPUT ? sourcePin.dataType : targetPin.dataType;
+      const toType = sourcePin.direction === PinDirection.OUTPUT ? targetPin.dataType : sourcePin.dataType;
+      if (fromType !== DataType.ANY && toType !== DataType.ANY && fromType !== toType) {
+        return false;
+      }
+    }
 
     return true;
   }, [pin, sourcePinForPendingConnection, isSelf]);
 
   const interactionStyles = useMemo(() => {
     if (!sourcePinForPendingConnection) return '';
-    if (isSelf) return '';
+    if (isSelf) return 'opacity-50'; // Dim the source pin
     if (isCompatible) return 'ring-2 ring-yellow-400 rounded-full scale-125 transition-transform z-10';
     return 'opacity-30';
   }, [sourcePinForPendingConnection, isCompatible, isSelf]);
@@ -92,9 +103,9 @@ export const Pin: React.FC<PinProps> = ({ pin, onMouseDown, onMouseUp, onValueCh
   const pinElement = (
     <div
       ref={pinRef}
+      data-pin="true"
+      data-pin-id={pin.id}
       className={`cursor-pointer transition-all ${interactionStyles}`}
-      onMouseDown={(e) => onMouseDown(e, pin.nodeId, pin.id)}
-      onMouseUp={(e) => onMouseUp(e, pin.nodeId, pin.id)}
     >
       {pin.type === PinTypeEnum.EXECUTION ? (
         <ExecutionPinIcon isConnected={isConnected} />

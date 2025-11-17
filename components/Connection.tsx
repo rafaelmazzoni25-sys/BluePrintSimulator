@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Node, Connection as ConnectionType, PendingConnection } from '../types';
 import { PinDirection, PinType } from '../types';
@@ -10,7 +9,7 @@ interface ConnectionProps {
   isPending?: boolean;
 }
 
-function getPinPosition(node: Node, pinId: string, editorRect: DOMRect): { x: number; y: number; pinType: PinType, dataType: string } | null {
+function getPinPosition(node: Node, pinId: string): { x: number; y: number; pinType: PinType, dataType: string } | null {
   const pin = [...node.inputs, ...node.outputs].find(p => p.id === pinId);
   if (!pin) return null;
 
@@ -20,7 +19,7 @@ function getPinPosition(node: Node, pinId: string, editorRect: DOMRect): { x: nu
 
   const x = pin.direction === PinDirection.INPUT
     ? node.position.x
-    : node.position.x + NODE_WIDTH;
+    : node.position.x + (node.width || NODE_WIDTH);
   
   const y = node.position.y + NODE_HEADER_HEIGHT + 20 + (pinIndex * 24);
 
@@ -31,7 +30,7 @@ export const Connection: React.FC<ConnectionProps> = ({ connection, nodes, isPen
   const fromNode = nodes.find(n => n.id === connection.from.nodeId);
   if (!fromNode) return null;
 
-  const fromPinInfo = getPinPosition(fromNode, connection.from.pinId, document.body.getBoundingClientRect());
+  const fromPinInfo = getPinPosition(fromNode, connection.from.pinId);
   if (!fromPinInfo) return null;
 
   let toPos, toPinInfo;
@@ -41,14 +40,15 @@ export const Connection: React.FC<ConnectionProps> = ({ connection, nodes, isPen
   } else {
     const toNode = nodes.find(n => n.id === (connection as ConnectionType).to.nodeId);
     if (!toNode) return null;
-    toPinInfo = getPinPosition(toNode, (connection as ConnectionType).to.pinId, document.body.getBoundingClientRect());
+    toPinInfo = getPinPosition(toNode, (connection as ConnectionType).to.pinId);
     if (!toPinInfo) return null;
     toPos = { x: toPinInfo.x, y: toPinInfo.y };
   }
   
   const startPos = {x: fromPinInfo.x, y: fromPinInfo.y};
 
-  const path = `M ${startPos.x} ${startPos.y} C ${startPos.x + 100} ${startPos.y} ${toPos.x - 100} ${toPos.y} ${toPos.x} ${toPos.y}`;
+  const dx = Math.abs(toPos.x - startPos.x) * 0.6;
+  const path = `M ${startPos.x} ${startPos.y} C ${startPos.x + dx} ${startPos.y} ${toPos.x - dx} ${toPos.y} ${toPos.x} ${toPos.y}`;
 
   const strokeColor = fromPinInfo.pinType === PinType.EXECUTION
     ? 'white'

@@ -17,6 +17,14 @@ export enum PinDirection {
   OUTPUT = 'OUTPUT',
 }
 
+export enum NodeCategory {
+  EVENT = 'EVENT',
+  ACTION = 'ACTION',
+  FLOW_CONTROL = 'FLOW_CONTROL',
+  DATA = 'DATA', // For pure nodes like math, literals, get var
+  COMMENT = 'COMMENT',
+}
+
 export type NodeId = string;
 export type PinId = string;
 export type ConnectionId = string;
@@ -36,6 +44,7 @@ export interface Node {
   id: NodeId;
   type: string; // e.g., 'EVENT_BEGIN_PLAY', 'ACTION_PRINT_STRING'
   name: string;
+  category: NodeCategory;
   position: { x: number; y: number };
   inputs: Pin[];
   outputs: Pin[];
